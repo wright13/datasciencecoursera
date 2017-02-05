@@ -1,0 +1,394 @@
+---
+title: "Getting and Cleaning Data - Course Notes"
+author: "Sarah E. Wright"
+date: "January 25, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Subsetting and Sorting
+
+##### Generate dummy data frame
+```{r dummydata}
+set.seed(13435)
+X <- data.frame("var1" = sample(1:5), "var2" = sample(6:10), "var3" = sample(11:15))
+X <- X[sample(1:5),]; X$var2[c(1,3)] = NA
+```
+
+### Subsetting
+
+####By columns
+##### Using column index
+```{r} 
+X[,1]
+```
+##### Using column name
+```{r}
+X[,"var1"]
+```
+##### By rows and columns
+```{r}
+X[1:2,"var2"]
+X[c(1,3),"var2"]
+```
+##### Using logical statements
+```{r}
+X[(X$var1 <= 3 & X$var3 > 11),]
+X[(X$var1 <= 3 | X$var3 > 15),]
+```
+##### When missing values are present
+This doesn't work because `X$var2 > 8` evaluates to `NA` in rows 1 and 3, returning entire rows of `NA`:
+```{r} 
+X[X$var2 > 8,]
+```
+Instead, use `which()` to omit rows where `X$var2` is `NA`
+```{r}
+X[which(X$var2 > 8),]
+```
+
+### Sorting
+#### By a column
+##### Ascending
+```{r}
+sort(X$var1)
+```
+##### Descending
+```{r}
+sort(X$var1,decreasing = TRUE)
+```
+##### With `NA` at the end
+```{r}
+sort(X$var2,na.last = TRUE)
+```
+##### By `var1`, then by `var3`, in increasing order
+```{r}
+X[order(X$var1,X$var3),]
+```
+##### By `var1` in decreasing order, then by `var3` in increasing order
+```{r}
+X[order(-X$var1,X$var3),]
+```
+##### Using `plyr`
+```{r}
+library(plyr)
+```
+```{r}
+arrange(X,desc(var1),var3)
+arrange(X,var2,na.last = TRUE)
+```
+
+### Adding rows and columns
+```{r}
+X$var4 <- rnorm(5)
+X
+```
+####Using cbind, rbind
+##### Bind new column to right side of X
+```{r}
+Y <- cbind(X,rnorm(5))
+Y
+```
+##### Bind new column to left side of x
+```{r}
+Y <- cbind(rnorm(5),X)
+Y
+```
+##### Bind new row to bottom of X
+```{r}
+Y <- rbind(X,rnorm(5))
+Y
+```
+##### Bind new row to top of X
+```{r}
+Y <- rbind(rnorm(5),X)
+Y
+```
+
+
+## Creating New Variables
+
+#### Common variables to create
+  + Missingness indicators
+  + "Cutting up" quantitative variables
+    - Creating factor versions corresponding to values of interest
+  + Applying transforms
+
+#### Download data  
+```{r}
+# if(!file.exists("./data")){dir.create("./data")} 
+# fileUrl <- "https://data.baltimorecity.gov/api/views/k5ry-ef3g/rows.csv?accessType=DOWNLOAD" 
+# download.file(fileUrl,destfile="./data/restaurants.csv") 
+restData <- read.csv("./data/restaurants.csv")  
+```
+
+### Creating sequences
+
+##### Specify min, max, and either step size or length
+```{r}
+s1 <- seq(1,10,by=2); s1
+s2 <- seq(1,10,length=3); s2
+```
+
+##### Create indices for an existing vector
+```{r}
+x<-c(1,3,8,25,100); seq(along=x)
+```
+
+### Subsetting Variables
+
+##### Create new variable that will be used to easily subset the data set
+```{r}
+restData$nearMe = restData$neighborhood %in% c("Roland Park","Homeland")
+table(restData$nearMe)
+```
+
+####Creating binary variables
+
+##### Use `ifelse` to create a column with one value if specified criteria are met and another value if they aren't
+```{r}
+restData$zipWrong = ifelse(restData$zipCode < 0,TRUE,FALSE)
+table(restData$zipWrong)
+```
+
+####Creating categorical variables
+
+##### Use `cut` to break a quantitative variable into factors based on `breaks`
+```{r}
+restData$zipGroups = cut(restData$zipCode,breaks=quantile(restData$zipCode))
+table(restData$zipGroups,restData$zipCode)
+```
+
+####Creating factor variables
+
+##### Use `factor` to create a factor variable
+```{r}
+restData$zcf <- factor(restData$zipCode)
+restData$zcf[1:10]
+```
+
+####Properties of factor variables
+
+##### Create dummy factor variable, using `levels` to specify the order of the levels (default is alphabetical order). `relevel` will change the order of levels in an existing factor variable.
+```{r}
+yesno <- sample(c("yes","no"),size=10,replace=TRUE)
+yesnofac <- factor(yesno, levels=c("no","yes"))
+yesnofac
+yesnofac <- relevel(yesnofac,ref="yes")
+yesnofac
+```
+
+##### Convert a factor variable into a numeric variable
+```{r}
+as.numeric(yesnofac)
+typeof(as.numeric(yesnofac))
+```
+
+##### Use the `mutate` function to create a new data frame with a new factor variable added
+```{r include=FALSE}
+library(Hmisc); library(plyr)
+```
+```{r}
+restData2 = mutate(restData, zipGroups = cut2(zipCode,g=4))
+table(restData2$zipGroups)
+```
+
+## Reshaping Data
+
+```{r}
+library(reshape2)
+head(mtcars)
+```
+### Melting data frames
+#### Take a data frame with multiple columns of variables and "melt" it into a tall, skinny data set where there is one row for each value of each variable in `measure.vars`
+```{r}
+mtcars$carname <- rownames(mtcars)
+carMelt <- melt(mtcars,id=c("carname","gear","cyl"),measure.vars = c("mpg","hp"))
+head(carMelt,n=3)
+tail(carMelt,n=3)
+```
+
+### Casting data frames
+#### Use `dcast(dataframe, rowheaders, colheaders) to reshape melted data frames. The default value is the number of measurements for each row header - column header pair.
+```{r}
+cylData <- dcast(carMelt,cyl~variable)
+cylData
+```
+
+#### Alternately, specify the summary function
+```{r}
+cylData <- dcast(carMelt, cyl~variable, mean)
+cylData
+```
+
+### Averaging values
+
+##### Sum `InsectSprays$count` for each unique value of `InsectSprays$spray`
+```{r}
+head(InsectSprays,n=3)
+tapply(InsectSprays$count,InsectSprays$spray,sum)
+```
+
+#### Split-apply-combine
+##### Split - get a list of counts for each type of spray
+```{r}
+spIns = split(InsectSprays$count,InsectSprays$spray)
+spIns
+typeof(spIns)
+```
+
+##### Use `lapply` to apply the sum function to each element of the list
+```{r}
+sprCount = lapply(spIns,sum)
+typeof(sprCount)
+```
+
+##### Use `unlist` to simplify the result into a vector
+```{r}
+unlist(sprCount)
+typeof(unlist(sprCount))
+```
+
+##### Alternately, use `sapply` to do both the apply and combine steps
+```{r}
+sapply(spIns,sum)
+typeof(sapply(spIns,sum))
+```
+
+#### Using the `plyr` package
+##### `ddply` splits a data frame, applies a function, and returns the results in a data frame.
+```{r}
+ddply(InsectSprays, .(spray) ,summarise,sum=sum(count))
+```
+
+##### `ave` splits a data frame and applies a function like above, but instead of collapsing the data frame on factor levels, it just assigns the result of the function to each row based on factor level.
+```{r}
+spraySums <- ddply(InsectSprays,.(spray),summarise, sum=ave(count,FUN = sum))
+head(spraySums,n=3)
+tail(spraySums,n=3)
+```
+
+## Managing Data Frames with `dplyr`
+
+`dplyr` can work with other data frame "backends" besides the default R implementation. Use data.table for large, fast tables. `dplyr` also works with a SQL backend using the `DBI` package.
+
+#### `dplyr` verbs
+- Select
+    - return a subset of the columns of a data frame
+- Filter
+    - extract a subset of rows from a data frame based on logical conditions
+- Arrange
+    - reorder rows of a data frame
+- Mutate
+    - add new variables/columns or transform existing variables
+- Summarise
+    - generate summary statistics of different variables in the data frame, possibly within strata.
+  
+#### `dplyr` Properties
+- The first argument is a data frame
+- The subsequent arguments describe what to do with it, and columns can be referred to directly by name without using the $ operator.
+- The result is a new data frame
+
+#### Basic tools
+
+```{r include=FALSE}
+library(plyr)
+library(dplyr)
+```
+##### Get data:
+```{r}
+#con <- gzfile("chicago.rds")
+chicago <- readRDS("C:/Users/sewright/Documents/R/Classes/Getting and Cleaning Data/data/chicago.rds")
+#close(con)
+dim(chicago)
+str(chicago)
+```
+##### Select only certain columns of a data frame
+```{r}
+head(select(chicago, city:dptp))
+head(select(chicago, -(city:dptp)))
+```
+
+##### Subset rows
+```{r}
+chicago.filtered <- filter(chicago, pm25tmean2 > 30 & tmpd > 80)
+head(chicago.filtered,n=5)
+```
+
+##### Sort dataset
+```{r}
+chicago.sorted <- arrange(chicago,date,desc(dptp))
+head(chicago.sorted)
+```
+##### Rename variables
+```{r}
+chicago <- rename(chicago, pm25 = pm25tmean2, dewpoint = dptp)
+head(chicago,n=3)
+```
+
+##### Add new variables calculated from existing variables
+```{r}
+chicago <- mutate(chicago, pm25detrend = pm25 - mean(chicago$pm25,na.rm = TRUE))
+head(select(chicago, pm25, pm25detrend                       ))
+tail(select(chicago, pm25, pm25detrend))
+```
+
+##### Split a data frame according to categorical variables
+```{r}
+chicago <- mutate(chicago, tempcat = factor(1*(tmpd>80),labels=c("cold","hot")))
+hotcold <- group_by(chicago, tempcat)
+hotcold
+```
+
+##### Summarize by tempcat
+```{r}
+summarize(hotcold,pm25 = mean(pm25,na.rm = TRUE),o3 = max(o3tmean2),no2 = median(no2tmean2))
+```
+##### Given a data frame with a date variable, summarize by year
+```{r}
+chicago <- mutate(chicago, year = as.POSIXlt(date)$year + 1900)
+years <- group_by(chicago, year)
+head(years)
+summarise(years, pm25 = mean(pm25, na.rm = TRUE),o3 = max(o3tmean2),no2 = median(no2tmean2))
+```
+
+##### Using the pipeline variable
+```{r}
+chicago %>% mutate(month = as.POSIXlt(date)$mon + 1) %>% group_by(month) %>% summarize(pm25 = mean(pm25, na.rm = TRUE), o3 = max(o3tmean2))
+```
+
+## Merging Data
+
+##### Get data:
+```{r}
+# if(!file.exists("./data")){
+#   dir.create("./data")
+# }
+# fileUrl1 = "https://dl.dropboxusercontent.com/u/7710864/data/reviews-apr29.csv"
+# fileUrl2 = "https://dl.dropboxusercontent.com/u/7710864/data/solutions-apr29.csv"
+# if(!file.exists("./data/reviews.csv")) {
+#   download.file(fileUrl1,destfile="./data/reviews.csv")
+# }
+# if(!file.exists("./data/solutions.csv")) {
+#   download.file(fileUrl2,destfile="./data/solutions.csv")
+# }
+reviews = read.csv("./data/reviews.csv")
+solutions = read.csv("./data/solutions.csv")
+head(reviews,2)
+```
+
+#### Using `merge()`. Use `all=TRUE` to include all rows from each data frame, even when there is no corresponding row in the other data frame. This corresponds to a full outer join.
+```{r}
+mergedData <- merge(reviews,solutions, by.x = "solution_id", by.y = "id", all=TRUE)
+head(mergedData)
+```
+
+
+
+
+
+
+
+
