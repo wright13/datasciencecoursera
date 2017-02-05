@@ -54,12 +54,4 @@ smartphoneSensorData <- cbind(activity,subject,smartphoneSensorData)
 smartphoneSensorData <- merge(activitylookup,smartphoneSensorData, by.x = "activityid",by.y = "activityid",sort = FALSE)
 smartphoneSensorData <- select(smartphoneSensorData,-activityid)
 
-# Use melt() to get a long dataset with one row per activity, subject, and variable.
-#smartphoneSensorData <- melt(smartphoneSensorData,id=c("activityname","subjectid"),measure.vars = names(smartphoneSensorData)[-(1:2)])
-
-# There is a lot of information contained in the variable names: 
-# domain (time or freq), signal source (accelerometer or gyroscope), signal component (body or gravity), 
-# type of measurement (linear acc, angular velocity, jerk), direction (X,Y,Z,mag), and summary statistic (mean, stdev).
-
-
 #Create second dataset with average of each variable for each activity and each subject.
